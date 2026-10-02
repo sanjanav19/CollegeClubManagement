@@ -29,9 +29,11 @@ struct LoginView: View {
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
+                        .accessibilityIdentifier("emailField")
 
                     SecureField("Password", text: $password)
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("passwordField")
                 }
 
                 Button {
@@ -47,6 +49,7 @@ struct LoginView: View {
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .accessibilityIdentifier("loginButton")
 
                 Text("Demo: enter any email to continue.\nUse an email containing \"admin\" for Admin mode.")
                     .font(.caption)

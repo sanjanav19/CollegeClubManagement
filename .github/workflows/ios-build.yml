@@ -45,12 +45,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
+
       - name: Boot iPhone Simulator
         run: |
-          DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 16" | head -1 | grep -oE '[A-F0-9-]{36}')
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
+          echo "Using simulator: $DEVICE_ID"
           xcrun simctl boot "$DEVICE_ID" || true
-          open -a Simulator
-          sleep 10
+          xcrun simctl bootstatus "$DEVICE_ID" -b
 
       - name: Install app on Simulator
         run: |
@@ -61,3 +62,17 @@ jobs:
         run: |
           DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
           xcrun simctl launch "$DEVICE_ID" com.sanjanav19.CollegeClubManagement
+
+      - name: Wait for app
+        run: sleep 5
+
+      - name: Take Simulator Screenshot
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
+          xcrun simctl io "$DEVICE_ID" screenshot simulator.png
+
+      - name: Upload Simulator Screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhone-Simulator-Screenshot
+          path: simulator.png

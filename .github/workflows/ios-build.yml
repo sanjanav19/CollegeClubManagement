@@ -50,28 +50,70 @@ jobs:
         run: |
           DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
           echo "Using simulator: $DEVICE_ID"
+          echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
       - name: Install app on Simulator
         run: |
-          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
-          xcrun simctl install "$DEVICE_ID" build/Build/Products/Debug-iphonesimulator/CollegeClubManagement.app
+          xcrun simctl install "$DEVICE_ID" \
+            build/Build/Products/Debug-iphonesimulator/CollegeClubManagement.app
+
+      - name: Start Simulator Recording
+        run: |
+          xcrun simctl io "$DEVICE_ID" recordVideo \
+            --codec=h264 \
+            --force \
+            simulator-demo.mp4 &
+          
+          echo $! > video_pid.txt
+
+          sleep 2
 
       - name: Launch app on Simulator
         run: |
-          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
-          xcrun simctl launch "$DEVICE_ID" com.sanjanav19.CollegeClubManagement
+          xcrun simctl launch "$DEVICE_ID" \
+            com.sanjanav19.CollegeClubManagement
 
-      - name: Wait for app
-        run: sleep 5
+          sleep 3
+
+      - name: Run UI Test
+        run: |
+          xcodebuild \
+            test \
+            -project CollegeClubManagement.xcodeproj \
+            -scheme CollegeClubManagement \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:CollegeClubManagementUITests/CollegeClubManagementUITests/testStudentFlow \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Stop Simulator Recording
+        if: always()
+        run: |
+          if [ -f video_pid.txt ]; then
+            VIDEO_PID=$(cat video_pid.txt)
+            kill -INT "$VIDEO_PID" || true
+            sleep 3
+          fi
+
+          ls -lh simulator-demo.mp4 || true
 
       - name: Take Simulator Screenshot
+        if: always()
         run: |
-          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
           xcrun simctl io "$DEVICE_ID" screenshot simulator.png
 
+      - name: Upload Demo Video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CollegeClubManagement-Demo
+          path: simulator-demo.mp4
+
       - name: Upload Simulator Screenshot
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: iPhone-Simulator-Screenshot

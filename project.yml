@@ -30,3 +30,29 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.education
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
+
+  CollegeClubManagementUITests:
+    type: bundle.ui-testing
+    platform: iOS
+
+    sources:
+      - path: UITests
+
+    dependencies:
+      - target: CollegeClubManagement
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sanjanav19.CollegeClubManagementUITests
+        SWIFT_VERSION: "5.0"
+
+schemes:
+  CollegeClubManagement:
+    build:
+      targets:
+        CollegeClubManagement: all
+        CollegeClubManagementUITests: [test]
+
+    test:
+      targets:
+        - CollegeClubManagementUITests

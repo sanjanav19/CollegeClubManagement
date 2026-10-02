@@ -17,17 +17,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: List available simulators
-        run: xcrun simctl list devices available
+      - name: Verify project
+        run: |
+          ls -la
+          ls -la CollegeClubManagement.xcodeproj
+          xcodebuild -list -project CollegeClubManagement.xcodeproj
 
       - name: Build iOS app
         run: |
@@ -38,4 +43,5 @@ jobs:
             -configuration Debug \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             build

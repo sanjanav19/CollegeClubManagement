@@ -9,7 +9,7 @@ struct DashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
-                    // Welcome section
+                    // Welcome
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Welcome back 👋")
                             .font(.headline)
@@ -38,7 +38,7 @@ struct DashboardView: View {
                         )
                     }
 
-                    // Quick actions
+                    // Quick Actions
                     Text("Quick Actions")
                         .font(.title2.bold())
 
@@ -63,12 +63,11 @@ struct DashboardView: View {
                         }
                     }
 
-                    // Upcoming events
+                    // Upcoming Events
                     Text("Upcoming Events")
                         .font(.title2.bold())
 
                     ForEach(SampleData.events.prefix(3)) { event in
-
                         NavigationLink {
                             EventDetailView(event: event)
                         } label: {
@@ -83,6 +82,39 @@ struct DashboardView: View {
         }
     }
 }
+
+
+// MARK: - Statistics Card
+
+struct StatCard: View {
+
+    let title: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+
+            Image(systemName: icon)
+                .font(.title2)
+
+            Text(value)
+                .font(.title.bold())
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+
+// MARK: - Quick Action Card
+
 struct QuickActionCard: View {
 
     let title: String
@@ -99,6 +131,54 @@ struct QuickActionCard: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+
+// MARK: - Event Row
+
+struct EventRow: View {
+
+    let event: ClubEvent
+
+    var body: some View {
+        HStack(spacing: 14) {
+
+            Image(systemName: "calendar.badge.clock")
+                .font(.title2)
+                .foregroundStyle(.blue)
+                .frame(width: 45, height: 45)
+                .background(.blue.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 5) {
+
+                Text(event.title)
+                    .font(.headline)
+
+                Text(event.clubName)
+                    .font(.subheadline)
+                    .foregroundStyle(.blue)
+
+                Text(
+                    event.date.formatted(
+                        date: .abbreviated,
+                        time: .shortened
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(event.location)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))

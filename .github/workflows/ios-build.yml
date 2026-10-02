@@ -14,26 +14,53 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      # --------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # 2. Select Xcode
+      # --------------------------------------------------
       - name: Select Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
+      # --------------------------------------------------
+      # 3. Install XcodeGen
+      # --------------------------------------------------
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          brew install xcodegen
 
+      # --------------------------------------------------
+      # 4. Install FFmpeg
+      # --------------------------------------------------
+      - name: Install FFmpeg
+        run: |
+          brew install ffmpeg
+
+      # --------------------------------------------------
+      # 5. Generate Xcode project
+      # --------------------------------------------------
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          xcodegen generate
 
+      # --------------------------------------------------
+      # 6. Verify project
+      # --------------------------------------------------
       - name: Verify project
         run: |
           ls -la
           ls -la CollegeClubManagement.xcodeproj
           xcodebuild -list -project CollegeClubManagement.xcodeproj
 
+      # --------------------------------------------------
+      # 7. Build iOS app
+      # --------------------------------------------------
       - name: Build iOS app
         run: |
           xcodebuild \
@@ -46,9 +73,17 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
+      # --------------------------------------------------
+      # 8. Boot iPhone Simulator
+      # --------------------------------------------------
       - name: Boot iPhone Simulator
         run: |
           DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
+
+          if [ -z "$DEVICE_ID" ]; then
+            echo "ERROR: No iPhone Simulator found."
+            exit 1
+          fi
 
           echo "Using simulator: $DEVICE_ID"
           echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
@@ -56,11 +91,17 @@ jobs:
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
+      # --------------------------------------------------
+      # 9. Open Simulator
+      # --------------------------------------------------
       - name: Open Simulator
         run: |
           open -a Simulator
           sleep 5
 
+      # --------------------------------------------------
+      # 10. Install app
+      # --------------------------------------------------
       - name: Install app on Simulator
         run: |
           xcrun simctl terminate "$DEVICE_ID" \
@@ -69,10 +110,31 @@ jobs:
           xcrun simctl install "$DEVICE_ID" \
             build/Build/Products/Debug-iphonesimulator/CollegeClubManagement.app
 
+      # --------------------------------------------------
+      # 11. Launch app BEFORE recording
+      # --------------------------------------------------
+      - name: Launch CampusConnect
+        run: |
+          echo "Launching CampusConnect before recording..."
+
+          xcrun simctl launch "$DEVICE_ID" \
+            com.sanjanav19.CollegeClubManagement
+
+          echo "Waiting for CampusConnect to appear..."
+          sleep 8
+
+          echo "CampusConnect should now be visible."
+
+      # --------------------------------------------------
+      # 12. Start Simulator recording
+      # --------------------------------------------------
       - name: Start Simulator Recording
         run: |
           rm -f simulator-demo.mp4
+          rm -f simulator-demo-final.mp4
           rm -f recording.log
+
+          echo "Starting Simulator recording..."
 
           xcrun simctl io "$DEVICE_ID" recordVideo \
             --codec=h264 \
@@ -81,6 +143,7 @@ jobs:
             simulator-demo.mp4 > recording.log 2>&1 &
 
           VIDEO_PID=$!
+
           echo "$VIDEO_PID" > video_pid.txt
 
           echo "Recording process: $VIDEO_PID"
@@ -88,6 +151,7 @@ jobs:
           echo "Waiting for Simulator recording to start..."
 
           for i in {1..30}; do
+
             if grep -q "Recording started" recording.log; then
               echo "Recording has started successfully!"
               break
@@ -108,6 +172,9 @@ jobs:
             exit 1
           fi
 
+      # --------------------------------------------------
+      # 13. Run UI Test
+      # --------------------------------------------------
       - name: Run UI Test
         run: |
           xcodebuild \
@@ -119,10 +186,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
+      # --------------------------------------------------
+      # 14. Stop recording
+      # --------------------------------------------------
       - name: Stop Simulator Recording
         if: always()
         run: |
           if [ -f video_pid.txt ]; then
+
             VIDEO_PID=$(cat video_pid.txt)
 
             echo "Stopping recording process: $VIDEO_PID"
@@ -132,44 +203,112 @@ jobs:
             echo "Waiting for recording to finish..."
 
             for i in {1..20}; do
+
               if ! kill -0 "$VIDEO_PID" 2>/dev/null; then
                 break
               fi
+
               sleep 1
+
             done
           fi
 
-          echo "Recording log:"
+          echo ""
+          echo "========== RECORDING LOG =========="
           cat recording.log || true
 
-          echo "Video file:"
+          echo ""
+          echo "========== RAW VIDEO =========="
+
           ls -lh simulator-demo.mp4 || true
 
           if [ -f simulator-demo.mp4 ]; then
+
             VIDEO_SIZE=$(stat -f%z simulator-demo.mp4)
-            echo "Video size: $VIDEO_SIZE bytes"
+
+            echo "Raw video size: $VIDEO_SIZE bytes"
 
             if [ "$VIDEO_SIZE" -lt 10000 ]; then
               echo "ERROR: Video file is suspiciously small."
               exit 1
             fi
+
           else
+
             echo "ERROR: simulator-demo.mp4 was not created."
+            exit 1
+
+          fi
+
+      # --------------------------------------------------
+      # 15. Convert video to Windows-friendly MP4
+      # --------------------------------------------------
+      - name: Convert Demo Video
+        if: always()
+        run: |
+
+          if [ ! -f simulator-demo.mp4 ]; then
+            echo "Raw video does not exist. Skipping conversion."
             exit 1
           fi
 
+          echo "Converting Simulator video..."
+
+          ffmpeg \
+            -y \
+            -i simulator-demo.mp4 \
+            -c:v libx264 \
+            -pix_fmt yuv420p \
+            -preset medium \
+            -crf 23 \
+            -movflags +faststart \
+            simulator-demo-final.mp4
+
+          echo ""
+          echo "========== FINAL VIDEO =========="
+
+          ls -lh simulator-demo-final.mp4
+
+          FINAL_SIZE=$(stat -f%z simulator-demo-final.mp4)
+
+          echo "Final video size: $FINAL_SIZE bytes"
+
+          if [ "$FINAL_SIZE" -lt 10000 ]; then
+            echo "ERROR: Final video is suspiciously small."
+            exit 1
+          fi
+
+      # --------------------------------------------------
+      # 16. Take final Simulator screenshot
+      # --------------------------------------------------
       - name: Take Simulator Screenshot
         if: always()
         run: |
           xcrun simctl io "$DEVICE_ID" screenshot simulator.png
 
+      # --------------------------------------------------
+      # 17. Upload final demo video
+      # --------------------------------------------------
       - name: Upload Demo Video
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: CollegeClubManagement-Demo
+          name: CampusConnect-iPhone-Demo
+          path: simulator-demo-final.mp4
+
+      # --------------------------------------------------
+      # 18. Upload raw video for debugging
+      # --------------------------------------------------
+      - name: Upload Raw Video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusConnect-Raw-Video
           path: simulator-demo.mp4
 
+      # --------------------------------------------------
+      # 19. Upload recording log
+      # --------------------------------------------------
       - name: Upload Recording Log
         if: always()
         uses: actions/upload-artifact@v4
@@ -177,6 +316,9 @@ jobs:
           name: Recording-Log
           path: recording.log
 
+      # --------------------------------------------------
+      # 20. Upload Simulator screenshot
+      # --------------------------------------------------
       - name: Upload Simulator Screenshot
         if: always()
         uses: actions/upload-artifact@v4

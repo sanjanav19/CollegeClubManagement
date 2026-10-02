@@ -49,34 +49,64 @@ jobs:
       - name: Boot iPhone Simulator
         run: |
           DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
+
           echo "Using simulator: $DEVICE_ID"
           echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
 
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
+      - name: Open Simulator
+        run: |
+          open -a Simulator
+          sleep 5
+
       - name: Install app on Simulator
         run: |
+          xcrun simctl terminate "$DEVICE_ID" \
+            com.sanjanav19.CollegeClubManagement || true
+
           xcrun simctl install "$DEVICE_ID" \
             build/Build/Products/Debug-iphonesimulator/CollegeClubManagement.app
 
       - name: Start Simulator Recording
         run: |
+          rm -f simulator-demo.mp4
+          rm -f recording.log
+
           xcrun simctl io "$DEVICE_ID" recordVideo \
             --codec=h264 \
+            --display=internal \
             --force \
-            simulator-demo.mp4 &
-          
-          echo $! > video_pid.txt
+            simulator-demo.mp4 > recording.log 2>&1 &
 
-          sleep 2
+          VIDEO_PID=$!
+          echo "$VIDEO_PID" > video_pid.txt
 
-      - name: Launch app on Simulator
-        run: |
-          xcrun simctl launch "$DEVICE_ID" \
-            com.sanjanav19.CollegeClubManagement
+          echo "Recording process: $VIDEO_PID"
 
-          sleep 3
+          echo "Waiting for Simulator recording to start..."
+
+          for i in {1..30}; do
+            if grep -q "Recording started" recording.log; then
+              echo "Recording has started successfully!"
+              break
+            fi
+
+            if ! kill -0 "$VIDEO_PID" 2>/dev/null; then
+              echo "Recording process stopped unexpectedly."
+              cat recording.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          if ! grep -q "Recording started" recording.log; then
+            echo "Recording did not start within 30 seconds."
+            cat recording.log
+            exit 1
+          fi
 
       - name: Run UI Test
         run: |
@@ -94,11 +124,39 @@ jobs:
         run: |
           if [ -f video_pid.txt ]; then
             VIDEO_PID=$(cat video_pid.txt)
+
+            echo "Stopping recording process: $VIDEO_PID"
+
             kill -INT "$VIDEO_PID" || true
-            sleep 3
+
+            echo "Waiting for recording to finish..."
+
+            for i in {1..20}; do
+              if ! kill -0 "$VIDEO_PID" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
           fi
 
+          echo "Recording log:"
+          cat recording.log || true
+
+          echo "Video file:"
           ls -lh simulator-demo.mp4 || true
+
+          if [ -f simulator-demo.mp4 ]; then
+            VIDEO_SIZE=$(stat -f%z simulator-demo.mp4)
+            echo "Video size: $VIDEO_SIZE bytes"
+
+            if [ "$VIDEO_SIZE" -lt 10000 ]; then
+              echo "ERROR: Video file is suspiciously small."
+              exit 1
+            fi
+          else
+            echo "ERROR: simulator-demo.mp4 was not created."
+            exit 1
+          fi
 
       - name: Take Simulator Screenshot
         if: always()
@@ -111,6 +169,13 @@ jobs:
         with:
           name: CollegeClubManagement-Demo
           path: simulator-demo.mp4
+
+      - name: Upload Recording Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Recording-Log
+          path: recording.log
 
       - name: Upload Simulator Screenshot
         if: always()

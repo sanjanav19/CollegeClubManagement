@@ -45,3 +45,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
+      - name: Boot iPhone Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 16" | head -1 | grep -oE '[A-F0-9-]{36}')
+          xcrun simctl boot "$DEVICE_ID" || true
+          open -a Simulator
+          sleep 10
+
+      - name: Install app on Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
+          xcrun simctl install "$DEVICE_ID" build/Build/Products/Debug-iphonesimulator/CollegeClubManagement.app
+
+      - name: Launch app on Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1)
+          xcrun simctl launch "$DEVICE_ID" com.sanjanav19.CollegeClubManagement

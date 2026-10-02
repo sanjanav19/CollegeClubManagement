@@ -74,5 +74,5 @@ enum SampleData {
                 registeredCount: 67
             )
         ]
-    ]
+    }
 }
